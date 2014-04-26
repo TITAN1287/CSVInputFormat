@@ -176,7 +176,7 @@ public class CSVLineRecordReader extends RecordReader<LongWritable, List<Text>> 
 			val = (val.length() - (2 * delimiter.length()) > 0) ? val.substring(delimiter.length(), val.length()
 					-  delimiter.length()) : "";
 		}
-		text.append(val.getBytes("UTF-8"), 0, val.length());
+		text.append(val.getBytes("UTF-8"), 0, val.getBytes("UTF-8").length);
 		values.add(text);
 		// Empty string buffer
 		sb.setLength(0);
