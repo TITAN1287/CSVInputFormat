@@ -19,7 +19,7 @@ public class CSVNLineInputFormatTest {
 
     @Test
     public void shouldReturnListsAsRecords() throws Exception {
-        Configuration conf = createConfig();
+        Configuration conf = createConfig("./fixtures/teste2.csv");
         TaskAttemptContext context = new TaskAttemptContext(conf, new TaskAttemptID());
 
         CSVNLineInputFormat inputFormat = new CSVNLineInputFormat();
@@ -51,10 +51,44 @@ public class CSVNLineInputFormatTest {
         assertEquals("jack@example.com", thirdLineValue.get(2).toString());
     }
 
-    private Configuration createConfig() {
+    @Test
+    public void shouldReturnListsAsRecordsForTwoBytesStrings() throws Exception {
+        Configuration conf = createConfig("./fixtures/teste2_cyrillic.csv");
+        TaskAttemptContext context = new TaskAttemptContext(conf, new TaskAttemptID());
+
+        CSVNLineInputFormat inputFormat = new CSVNLineInputFormat();
+        List<InputSplit> actualSplits = inputFormat.getSplits(new JobContext(conf, new JobID()));
+        RecordReader<LongWritable, List<Text>> recordReader =
+                inputFormat.createRecordReader(actualSplits.get(0), context);
+
+        recordReader.initialize(actualSplits.get(0), context);
+
+        recordReader.nextKeyValue();
+        List<Text> firstLineValue = recordReader.getCurrentValue();
+
+        assertEquals("Джо Демо", firstLineValue.get(0).toString());
+        assertEquals("2 улица Демо,\nДемовиль,\nАвстралия. 2615", firstLineValue.get(1).toString());
+        assertEquals("joe@someaddress.com", firstLineValue.get(2).toString());
+
+        recordReader.nextKeyValue();
+        List<Text> secondLineValue = recordReader.getCurrentValue();
+
+        assertEquals("Джим Сэмпл", secondLineValue.get(0).toString());
+        assertEquals("", secondLineValue.get(1).toString());
+        assertEquals("jim@sample.com", secondLineValue.get(2).toString());
+
+        recordReader.nextKeyValue();
+        List<Text> thirdLineValue = recordReader.getCurrentValue();
+
+        assertEquals("Джек Экзампл", thirdLineValue.get(0).toString());
+        assertEquals("1 улица Экзампл, Экзамплвиль, Австралия.\n2615", thirdLineValue.get(1).toString());
+        assertEquals("jack@example.com", thirdLineValue.get(2).toString());
+    }
+
+    private Configuration createConfig(String fileName) {
         Configuration conf = new Configuration();
 
-        conf.setStrings("mapred.input.dir", "./fixtures/teste2.csv");
+        conf.setStrings("mapred.input.dir", fileName);
         conf.set(CSVLineRecordReader.FORMAT_DELIMITER, "\"");
         conf.set(CSVLineRecordReader.FORMAT_SEPARATOR, ",");
         conf.setInt(CSVNLineInputFormat.LINES_PER_MAP, 40000);
