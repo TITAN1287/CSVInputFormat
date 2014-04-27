@@ -91,7 +91,7 @@ public class CSVLineRecordReader extends RecordReader<LongWritable, List<Text>> 
 			is = zis;
 		}
 		this.is = is;
-		this.in = new BufferedReader(new InputStreamReader(is));
+		this.in = new BufferedReader(new InputStreamReader(is, "UTF-8"));
 	}
 
 	/**
@@ -114,7 +114,6 @@ public class CSVLineRecordReader extends RecordReader<LongWritable, List<Text>> 
 		// Reads each char from input stream unless eof was reached
 		while ((i = in.read()) != -1) {
 			c = (char) i;
-			numRead++;
 			sb.append(c);
 			// Check quotes, as delimiter inside quotes don't count
 			if (c == delimiter.charAt(quoteOffset)) {
@@ -131,7 +130,7 @@ public class CSVLineRecordReader extends RecordReader<LongWritable, List<Text>> 
 				if (c == separator.charAt(delimiterOffset)) {
 					delimiterOffset++;
 					if (delimiterOffset >= separator.length()) {
-						foundDelimiter(sb, values, true);
+						numRead += foundDelimiter(sb, values, true);
 						delimiterOffset = 0;
 					}
 				} else {
@@ -143,7 +142,7 @@ public class CSVLineRecordReader extends RecordReader<LongWritable, List<Text>> 
 				}
 			}
 		}
-		foundDelimiter(sb, values, false);
+		numRead += foundDelimiter(sb, values, false);
 		return numRead;
 	}
 
@@ -159,10 +158,13 @@ public class CSVLineRecordReader extends RecordReader<LongWritable, List<Text>> 
 	 *            should be true when called in the middle of the line, when a
 	 *            delimiter was found, and false when sb contains the line
 	 *            ending
+     * @return read field length
 	 * @throws UnsupportedEncodingException
 	 */
-	protected void foundDelimiter(StringBuffer sb, List<Text> values, boolean takeDelimiterOut)
+	protected int foundDelimiter(StringBuffer sb, List<Text> values, boolean takeDelimiterOut)
 			throws UnsupportedEncodingException {
+
+        int fieldLength = sb.toString().getBytes("UTF-8").length;
 
         //remove trailing LF
         if (sb.length() > 0 && sb.charAt(sb.length()-1) == '\n'){
@@ -180,6 +182,8 @@ public class CSVLineRecordReader extends RecordReader<LongWritable, List<Text>> 
 		values.add(text);
 		// Empty string buffer
 		sb.setLength(0);
+
+        return fieldLength;
 	}
 
 	/*

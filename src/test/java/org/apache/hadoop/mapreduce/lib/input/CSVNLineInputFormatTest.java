@@ -18,6 +18,50 @@ import static org.junit.Assert.assertEquals;
 public class CSVNLineInputFormatTest {
 
     @Test
+    public void shouldGenerateRightSplitsForOneByteEncodedSymbols() throws Exception {
+        Configuration conf = createConfig("./fixtures/teste2.csv");
+        conf.setInt(CSVNLineInputFormat.LINES_PER_MAP, 1);
+        TaskAttemptContext context = new TaskAttemptContext(conf, new TaskAttemptID());
+
+        CSVNLineInputFormat inputFormat = new CSVNLineInputFormat();
+        List<InputSplit> actualSplits = inputFormat.getSplits(new JobContext(conf, new JobID()));
+
+        RecordReader<LongWritable, List<Text>> recordReader =
+                inputFormat.createRecordReader(actualSplits.get(1), context);
+
+        recordReader.initialize(actualSplits.get(1), context);
+
+        recordReader.nextKeyValue();
+        List<Text> secondLineValue = recordReader.getCurrentValue();
+
+        assertEquals("Jim Sample", secondLineValue.get(0).toString());
+        assertEquals("", secondLineValue.get(1).toString());
+        assertEquals("jim@sample.com", secondLineValue.get(2).toString());
+    }
+
+    @Test
+    public void shouldGenerateRightSplitsForTwoByteEncodedSymbols() throws Exception {
+        Configuration conf = createConfig("./fixtures/teste2_cyrillic.csv");
+        conf.setInt(CSVNLineInputFormat.LINES_PER_MAP, 1);
+        TaskAttemptContext context = new TaskAttemptContext(conf, new TaskAttemptID());
+
+        CSVNLineInputFormat inputFormat = new CSVNLineInputFormat();
+        List<InputSplit> actualSplits = inputFormat.getSplits(new JobContext(conf, new JobID()));
+
+        RecordReader<LongWritable, List<Text>> recordReader =
+                inputFormat.createRecordReader(actualSplits.get(1), context);
+
+        recordReader.initialize(actualSplits.get(1), context);
+
+        recordReader.nextKeyValue();
+        List<Text> secondLineValue = recordReader.getCurrentValue();
+
+        assertEquals("Джим Сэмпл", secondLineValue.get(0).toString());
+        assertEquals("", secondLineValue.get(1).toString());
+        assertEquals("jim@sample.com", secondLineValue.get(2).toString());
+    }
+
+    @Test
     public void shouldReturnListsAsRecords() throws Exception {
         Configuration conf = createConfig("./fixtures/teste2.csv");
         TaskAttemptContext context = new TaskAttemptContext(conf, new TaskAttemptID());
