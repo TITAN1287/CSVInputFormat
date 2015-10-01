@@ -4,11 +4,13 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapreduce.InputSplit;
-import org.apache.hadoop.mapreduce.JobContext;
 import org.apache.hadoop.mapreduce.JobID;
 import org.apache.hadoop.mapreduce.RecordReader;
 import org.apache.hadoop.mapreduce.TaskAttemptContext;
 import org.apache.hadoop.mapreduce.TaskAttemptID;
+import org.apache.hadoop.mapreduce.task.JobContextImpl;
+import org.apache.hadoop.mapreduce.task.TaskAttemptContextImpl;
+import org.junit.Before;
 import org.junit.Test;
 
 import java.util.List;
@@ -17,14 +19,18 @@ import static org.junit.Assert.assertEquals;
 
 public class CSVNLineInputFormatTest {
 
+    @Before
+    public void setup() {
+    }
+
     @Test
     public void shouldGenerateRightSplitsForOneByteEncodedSymbols() throws Exception {
         Configuration conf = createConfig("./fixtures/teste2.csv");
         conf.setInt(CSVNLineInputFormat.LINES_PER_MAP, 1);
-        TaskAttemptContext context = new TaskAttemptContext(conf, new TaskAttemptID());
+        TaskAttemptContext context = new TaskAttemptContextImpl(conf, new TaskAttemptID());
 
         CSVNLineInputFormat inputFormat = new CSVNLineInputFormat();
-        List<InputSplit> actualSplits = inputFormat.getSplits(new JobContext(conf, new JobID()));
+        List<InputSplit> actualSplits = inputFormat.getSplits(new JobContextImpl(conf, new JobID()));
 
         RecordReader<LongWritable, List<Text>> recordReader =
                 inputFormat.createRecordReader(actualSplits.get(1), context);
@@ -43,10 +49,10 @@ public class CSVNLineInputFormatTest {
     public void shouldGenerateRightSplitsForTwoByteEncodedSymbols() throws Exception {
         Configuration conf = createConfig("./fixtures/teste2_cyrillic.csv");
         conf.setInt(CSVNLineInputFormat.LINES_PER_MAP, 1);
-        TaskAttemptContext context = new TaskAttemptContext(conf, new TaskAttemptID());
+        TaskAttemptContext context = new TaskAttemptContextImpl(conf, new TaskAttemptID());
 
         CSVNLineInputFormat inputFormat = new CSVNLineInputFormat();
-        List<InputSplit> actualSplits = inputFormat.getSplits(new JobContext(conf, new JobID()));
+        List<InputSplit> actualSplits = inputFormat.getSplits(new JobContextImpl(conf, new JobID()));
 
         RecordReader<LongWritable, List<Text>> recordReader =
                 inputFormat.createRecordReader(actualSplits.get(1), context);
@@ -64,10 +70,10 @@ public class CSVNLineInputFormatTest {
     @Test
     public void shouldReturnListsAsRecords() throws Exception {
         Configuration conf = createConfig("./fixtures/teste2.csv");
-        TaskAttemptContext context = new TaskAttemptContext(conf, new TaskAttemptID());
+        TaskAttemptContext context = new TaskAttemptContextImpl(conf, new TaskAttemptID());
 
         CSVNLineInputFormat inputFormat = new CSVNLineInputFormat();
-        List<InputSplit> actualSplits = inputFormat.getSplits(new JobContext(conf, new JobID()));
+        List<InputSplit> actualSplits = inputFormat.getSplits(new JobContextImpl(conf, new JobID()));
         RecordReader<LongWritable, List<Text>> recordReader =
                 inputFormat.createRecordReader(actualSplits.get(0), context);
 
@@ -98,10 +104,10 @@ public class CSVNLineInputFormatTest {
     @Test
     public void shouldReturnListsAsRecordsForTwoBytesStrings() throws Exception {
         Configuration conf = createConfig("./fixtures/teste2_cyrillic.csv");
-        TaskAttemptContext context = new TaskAttemptContext(conf, new TaskAttemptID());
+        TaskAttemptContext context = new TaskAttemptContextImpl(conf, new TaskAttemptID());
 
         CSVNLineInputFormat inputFormat = new CSVNLineInputFormat();
-        List<InputSplit> actualSplits = inputFormat.getSplits(new JobContext(conf, new JobID()));
+        List<InputSplit> actualSplits = inputFormat.getSplits(new JobContextImpl(conf, new JobID()));
         RecordReader<LongWritable, List<Text>> recordReader =
                 inputFormat.createRecordReader(actualSplits.get(0), context);
 

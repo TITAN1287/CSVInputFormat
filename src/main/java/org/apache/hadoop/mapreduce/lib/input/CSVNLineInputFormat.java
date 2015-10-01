@@ -86,7 +86,7 @@ public class CSVNLineInputFormat extends FileInputFormat<LongWritable, List<Text
 			throws IOException {
 		List<FileSplit> splits = new ArrayList<FileSplit>();
 		Path fileName = status.getPath();
-		if (status.isDir()) {
+		if (!status.isFile()) {
 			throw new IOException("Not a file: " + fileName);
 		}
 		FileSystem fs = fileName.getFileSystem(conf);
@@ -98,7 +98,7 @@ public class CSVNLineInputFormat extends FileInputFormat<LongWritable, List<Text
 			int numLines = 0;
 			long begin = 0;
 			long length = 0;
-			int num = -1;
+			int num;
 			while ((num = lr.readLine(line)) > 0) {
 				numLines++;
 				length += num;

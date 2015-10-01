@@ -37,7 +37,6 @@ public class CSVLineRecordReader extends RecordReader<LongWritable, List<Text>> 
 	public static final String DEFAULT_SEPARATOR = ",";
 	public static final boolean DEFAULT_ZIP = true;
 
-	private CompressionCodecFactory compressionCodecs = null;
 	private long start;
 	private long pos;
 	private long end;
@@ -200,7 +199,7 @@ public class CSVLineRecordReader extends RecordReader<LongWritable, List<Text>> 
 		start = split.getStart();
 		end = start + split.getLength();
 		final Path file = split.getPath();
-		compressionCodecs = new CompressionCodecFactory(job);
+		CompressionCodecFactory compressionCodecs = new CompressionCodecFactory(job);
 		final CompressionCodec codec = compressionCodecs.getCodec(file);
 
 		// open the file and seek to the start of the split
@@ -238,7 +237,7 @@ public class CSVLineRecordReader extends RecordReader<LongWritable, List<Text>> 
 		while (true) {
 			if (pos >= end)
 				return false;
-			int newSize = 0;
+			int newSize;
 			newSize = readLine(value);
 			pos += newSize;
 			if (newSize == 0) {
