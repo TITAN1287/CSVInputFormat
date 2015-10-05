@@ -113,6 +113,12 @@ public class CSVLineRecordReader extends RecordReader<LongWritable, List<Text>> 
 		// Reads each char from input stream unless eof was reached
 		while ((i = in.read()) != -1) {
 			c = (char) i;
+			// if our buffer is empty and we encounter a linefeed or carriage return, it likely means the file uses
+			// both, and we just finished the previous line on one or the other, so just ignore it until we get some
+			// content
+			if (sb.length() == 0 && (c == '\n' || c == '\r')) {
+				continue;
+			}
 			sb.append(c);
 			// Check quotes, as delimiter inside quotes don't count
 			if (c == delimiter.charAt(quoteOffset)) {
@@ -136,7 +142,7 @@ public class CSVLineRecordReader extends RecordReader<LongWritable, List<Text>> 
 					delimiterOffset = 0;
 				}
 				// A new line outside of a quote is a real csv line breaker
-				if (c == '\n') {
+				if (c == '\n' || c == '\r') {
 					break;
 				}
 			}
@@ -162,11 +168,10 @@ public class CSVLineRecordReader extends RecordReader<LongWritable, List<Text>> 
 	 */
 	protected int foundDelimiter(StringBuffer sb, List<Text> values, boolean takeDelimiterOut)
 			throws UnsupportedEncodingException {
-
         int fieldLength = sb.toString().getBytes("UTF-8").length;
 
-        //remove trailing LF
-        if (sb.length() > 0 && sb.charAt(sb.length()-1) == '\n'){
+        // remove trailing LF or CR
+        if (sb.length() > 0 && sb.charAt(sb.length()-1) == '\n' || sb.charAt(sb.length()-1) == '\r') {
             sb.deleteCharAt(sb.length()-1);
         }
 
