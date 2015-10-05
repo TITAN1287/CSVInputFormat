@@ -47,6 +47,7 @@ public class CSVLineRecordReader extends RecordReader<LongWritable, List<Text>> 
 	private String separator;
 	private Boolean isZipFile;
 	private InputStream is;
+	private StringBuffer sb;
 
 	/**
 	 * Default constructor is needed when called by reflection from hadoop
@@ -84,13 +85,13 @@ public class CSVLineRecordReader extends RecordReader<LongWritable, List<Text>> 
 		this.separator = conf.get(FORMAT_SEPARATOR, DEFAULT_SEPARATOR);
 		this.isZipFile = conf.getBoolean(IS_ZIPFILE, DEFAULT_ZIP);
 		if (isZipFile) {
-			@SuppressWarnings("resource")
 			ZipInputStream zis = new ZipInputStream(new BufferedInputStream(is));
 			zis.getNextEntry();
 			is = zis;
 		}
 		this.is = is;
 		this.in = new BufferedReader(new InputStreamReader(is, "UTF-8"));
+		this.sb = new StringBuffer();
 	}
 
 	/**
@@ -107,12 +108,16 @@ public class CSVLineRecordReader extends RecordReader<LongWritable, List<Text>> 
 		char c;
 		int numRead = 0;
 		boolean insideQuote = false;
-		StringBuffer sb = new StringBuffer();
+		// Empty string buffer
+		sb.setLength(0);
 		int i;
 		int quoteOffset = 0, delimiterOffset = 0;
 		boolean lastCharWasDelimiter = false;
 		// Reads each char from input stream unless eof was reached
 		while ((i = in.read()) != -1) {
+			// it is very important this value reflects the exact number of bytes read, otherwise the CSVTextInputFormat
+			// getSplits() function would break
+			numRead++;
 			c = (char) i;
 			// if our buffer is empty and we encounter a linefeed or carriage return, it likely means the file uses
 			// both, and we just finished the previous line on one or the other, so just ignore it until we get some
@@ -147,7 +152,7 @@ public class CSVLineRecordReader extends RecordReader<LongWritable, List<Text>> 
 				if (c == separator.charAt(delimiterOffset)) {
 					delimiterOffset++;
 					if (delimiterOffset >= separator.length()) {
-						numRead += foundDelimiter(sb, values, true);
+						foundDelimiter(values, true);
 						delimiterOffset = 0;
 					}
 				} else {
@@ -159,7 +164,7 @@ public class CSVLineRecordReader extends RecordReader<LongWritable, List<Text>> 
 				}
 			}
 		}
-		numRead += foundDelimiter(sb, values, false);
+		foundDelimiter(values, false);
 		return numRead;
 	}
 
@@ -167,21 +172,16 @@ public class CSVLineRecordReader extends RecordReader<LongWritable, List<Text>> 
 	 * Helper function that adds a new value to the values list passed as
 	 * argument.
 	 * 
-	 * @param sb
-	 *            StringBuffer that has the value to be added
 	 * @param values
 	 *            values list
 	 * @param takeDelimiterOut
 	 *            should be true when called in the middle of the line, when a
 	 *            delimiter was found, and false when sb contains the line
 	 *            ending
-     * @return read field length
 	 * @throws UnsupportedEncodingException
 	 */
-	protected int foundDelimiter(StringBuffer sb, List<Text> values, boolean takeDelimiterOut)
+	protected void foundDelimiter(List<Text> values, boolean takeDelimiterOut)
 			throws UnsupportedEncodingException {
-        int fieldLength = sb.toString().getBytes("UTF-8").length;
-
         // remove trailing LF or CR
         if (sb.length() > 0 && sb.charAt(sb.length()-1) == '\n' || sb.charAt(sb.length()-1) == '\r') {
             sb.deleteCharAt(sb.length()-1);
@@ -198,8 +198,6 @@ public class CSVLineRecordReader extends RecordReader<LongWritable, List<Text>> 
 		values.add(text);
 		// Empty string buffer
 		sb.setLength(0);
-
-        return fieldLength;
 	}
 
 	/*
