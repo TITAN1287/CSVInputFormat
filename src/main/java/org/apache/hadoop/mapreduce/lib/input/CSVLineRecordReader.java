@@ -110,6 +110,7 @@ public class CSVLineRecordReader extends RecordReader<LongWritable, List<Text>> 
 		StringBuffer sb = new StringBuffer();
 		int i;
 		int quoteOffset = 0, delimiterOffset = 0;
+		boolean lastCharWasDelimiter = false;
 		// Reads each char from input stream unless eof was reached
 		while ((i = in.read()) != -1) {
 			c = (char) i;
@@ -122,6 +123,16 @@ public class CSVLineRecordReader extends RecordReader<LongWritable, List<Text>> 
 			sb.append(c);
 			// Check quotes, as delimiter inside quotes don't count
 			if (c == delimiter.charAt(quoteOffset)) {
+				// if the last character was a delimiter AND the current character is a delimiter, delete the last
+				// character as it is an escape character (i.e. when someone wants a double quote in their value,
+				// it becomes escaped with another double quote, if the real value is 'a string with "double quotes"'
+				// it becomes "a string with ""double quotes""" in a csv file)
+				if (lastCharWasDelimiter) {
+					lastCharWasDelimiter = false;
+					sb.deleteCharAt(sb.length() - 1);
+				} else {
+					lastCharWasDelimiter = true;
+				}
 				quoteOffset++;
 				if (quoteOffset >= delimiter.length()) {
 					insideQuote = !insideQuote;
@@ -129,6 +140,7 @@ public class CSVLineRecordReader extends RecordReader<LongWritable, List<Text>> 
 				}
 			} else {
 				quoteOffset = 0;
+				lastCharWasDelimiter = false;
 			}
 			// Check delimiters, but only those outside of quotes
 			if (!insideQuote) {
