@@ -10,7 +10,7 @@ public class BasicTest {
 
 	}
 
-	@Test
+//	@Test
 	public void testFullProcess() throws Exception {
 		String[] args = {};// {"runSolrOnly"};
 		// Let ToolRunner handle generic command-line options

@@ -142,7 +142,6 @@ public class CSVNLineInputFormatTest {
         conf.set(CSVLineRecordReader.FORMAT_DELIMITER, "\"");
         conf.set(CSVLineRecordReader.FORMAT_SEPARATOR, ",");
         conf.setInt(CSVNLineInputFormat.LINES_PER_MAP, 40000);
-        conf.setBoolean(CSVLineRecordReader.IS_ZIPFILE, false);
 
         return conf;
     }

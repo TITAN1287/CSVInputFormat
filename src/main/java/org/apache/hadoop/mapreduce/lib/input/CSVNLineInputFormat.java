@@ -82,7 +82,7 @@ public class CSVNLineInputFormat extends FileInputFormat<LongWritable, List<Text
 	 * @return list of file splits to be processed.
 	 * @throws IOException
 	 */
-	public static List<FileSplit> getSplitsForFile(FileStatus status, Configuration conf, int numLinesPerSplit)
+	public List<FileSplit> getSplitsForFile(FileStatus status, Configuration conf, int numLinesPerSplit)
 			throws IOException {
 		List<FileSplit> splits = new ArrayList<FileSplit>();
 		Path fileName = status.getPath();
@@ -98,26 +98,19 @@ public class CSVNLineInputFormat extends FileInputFormat<LongWritable, List<Text
 			int numLines = 0;
 			long begin = 0;
 			long length = 0;
-			int num;
-			while ((num = lr.readLine(line)) > 0) {
+			int size;
+			while ((size = lr.readLine(line)) > 0) {
 				numLines++;
-				length += num;
+				length += size;
 				if (numLines == numLinesPerSplit) {
-					// To make sure that each mapper gets N lines,
-					// we move back the upper split limits of each split
-					// by one character here.
-					if (begin == 0) {
-						splits.add(new FileSplit(fileName, begin, length - 1, new String[] {}));
-					} else {
-						splits.add(new FileSplit(fileName, begin, length - 1, new String[] {}));
-					}
+					splits.add(makeSplit(fileName, begin, length, new String[0]));
 					begin += length;
 					length = 0;
 					numLines = 0;
 				}
 			}
 			if (numLines != 0) {
-				splits.add(new FileSplit(fileName, begin, length, new String[] {}));
+				splits.add(makeSplit(fileName, begin, length, new String[0]));
 			}
 		} finally {
 			if (lr != null) {

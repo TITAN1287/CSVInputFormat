@@ -1,0 +1,33 @@
+group 'com.s1mbi0se.hadoop'
+version '1.0'
+
+apply plugin: 'java'
+
+sourceCompatibility = 1.7
+
+repositories {
+    mavenCentral()
+    mavenLocal()
+}
+
+dependencies {
+    compile 'org.apache.hadoop:hadoop-common:2.6.0'
+    compile 'org.apache.hadoop:hadoop-mapreduce-client-core:2.6.0'
+    testCompile group: 'junit', name: 'junit', version: '4.11'
+}
+
+def versionOverrides = [
+        "com.google.guava:guava": "14.0",
+]
+
+configurations.all {
+    resolutionStrategy.eachDependency { DependencyResolveDetails details ->
+
+        def overrideVersion = versionOverrides[details.requested.group + ":" + details.requested.name]
+
+        if (overrideVersion != null && details.requested.version != overrideVersion) {
+            logger.info "Overriding dependency ${details.requested.group}:${details.requested.name} version ${details.requested.version} --> $overrideVersion"
+            details.useVersion overrideVersion
+        }
+    }
+}

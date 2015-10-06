@@ -43,7 +43,6 @@ public class CSVTestRunner extends Configured implements Tool {
 		getConf().set(CSVLineRecordReader.FORMAT_DELIMITER, "\"");
 		getConf().set(CSVLineRecordReader.FORMAT_SEPARATOR, ";");
 		getConf().setInt(CSVNLineInputFormat.LINES_PER_MAP, 40000);
-		getConf().setBoolean(CSVLineRecordReader.IS_ZIPFILE, false);
 		Job csvJob = new Job(getConf(), "csv_test_job");
 		csvJob.setJarByClass(CSVTestRunner.class);
 		csvJob.setNumReduceTasks(0);		

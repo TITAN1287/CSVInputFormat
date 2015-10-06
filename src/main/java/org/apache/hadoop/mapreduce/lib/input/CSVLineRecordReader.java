@@ -1,5 +1,7 @@
 package org.apache.hadoop.mapreduce.lib.input;
 
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileSystem;
@@ -12,7 +14,6 @@ import org.apache.hadoop.mapreduce.InputSplit;
 import org.apache.hadoop.mapreduce.RecordReader;
 import org.apache.hadoop.mapreduce.TaskAttemptContext;
 
-import java.io.BufferedInputStream;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
@@ -20,7 +21,6 @@ import java.io.InputStreamReader;
 import java.io.Reader;
 import java.io.UnsupportedEncodingException;
 import java.util.List;
-import java.util.zip.ZipInputStream;
 
 /**
  * Reads a CSV line. CSV files could be multiline, as they may have line breaks
@@ -30,12 +30,11 @@ import java.util.zip.ZipInputStream;
  * 
  */
 public class CSVLineRecordReader extends RecordReader<LongWritable, List<Text>> {
+	private static final Log LOG = LogFactory.getLog(CSVLineRecordReader.class);
 	public static final String FORMAT_DELIMITER = "mapreduce.csvinput.delimiter";
 	public static final String FORMAT_SEPARATOR = "mapreduce.csvinput.separator";
-	public static final String IS_ZIPFILE = "mapreduce.csvinput.zipfile";
 	public static final String DEFAULT_DELIMITER = "\"";
 	public static final String DEFAULT_SEPARATOR = ",";
-	public static final boolean DEFAULT_ZIP = true;
 
 	private long start;
 	private long pos;
@@ -45,8 +44,6 @@ public class CSVLineRecordReader extends RecordReader<LongWritable, List<Text>> 
 	private List<Text> value = null;
 	private String delimiter;
 	private String separator;
-	private Boolean isZipFile;
-	private InputStream is;
 	private StringBuffer sb;
 
 	/**
@@ -83,13 +80,6 @@ public class CSVLineRecordReader extends RecordReader<LongWritable, List<Text>> 
 	public void init(InputStream is, Configuration conf) throws IOException {
 		this.delimiter = conf.get(FORMAT_DELIMITER, DEFAULT_DELIMITER);
 		this.separator = conf.get(FORMAT_SEPARATOR, DEFAULT_SEPARATOR);
-		this.isZipFile = conf.getBoolean(IS_ZIPFILE, DEFAULT_ZIP);
-		if (isZipFile) {
-			ZipInputStream zis = new ZipInputStream(new BufferedInputStream(is));
-			zis.getNextEntry();
-			is = zis;
-		}
-		this.is = is;
 		this.in = new BufferedReader(new InputStreamReader(is, "UTF-8"));
 		this.sb = new StringBuffer();
 	}
@@ -104,7 +94,7 @@ public class CSVLineRecordReader extends RecordReader<LongWritable, List<Text>> 
 	 * @throws IOException
 	 */
 	protected int readLine(List<Text> values) throws IOException {
-		values.clear();// Empty value columns list
+		values.clear(); // Empty value columns list
 		char c;
 		int numRead = 0;
 		boolean insideQuote = false;
@@ -118,6 +108,17 @@ public class CSVLineRecordReader extends RecordReader<LongWritable, List<Text>> 
 			// it is very important this value reflects the exact number of bytes read, otherwise the CSVTextInputFormat
 			// getSplits() function would break
 			numRead++;
+			// if we read a utf-8 character, we need to account for it's size in bytes
+			// see https://en.wikipedia.org/wiki/UTF-8 (5 and 6 byte characters are no longer part of utf-8, RFC 3629)
+			if (i > 0x007F) { // 127
+				numRead++;
+			}
+			if (i > 0x07FF) { // 2047
+				numRead++;
+			}
+			if (i > 0xFFFF) { // 65535
+				numRead++;
+			}
 			c = (char) i;
 			// if our buffer is empty and we encounter a linefeed or carriage return, it likely means the file uses
 			// both, and we just finished the previous line on one or the other, so just ignore it until we get some
@@ -152,7 +153,7 @@ public class CSVLineRecordReader extends RecordReader<LongWritable, List<Text>> 
 				if (c == separator.charAt(delimiterOffset)) {
 					delimiterOffset++;
 					if (delimiterOffset >= separator.length()) {
-						foundDelimiter(values, true);
+						addCell(values, true);
 						delimiterOffset = 0;
 					}
 				} else {
@@ -164,7 +165,7 @@ public class CSVLineRecordReader extends RecordReader<LongWritable, List<Text>> 
 				}
 			}
 		}
-		foundDelimiter(values, false);
+		addCell(values, false);
 		return numRead;
 	}
 
@@ -174,30 +175,53 @@ public class CSVLineRecordReader extends RecordReader<LongWritable, List<Text>> 
 	 * 
 	 * @param values
 	 *            values list
-	 * @param takeDelimiterOut
+	 * @param removeSeparator
 	 *            should be true when called in the middle of the line, when a
 	 *            delimiter was found, and false when sb contains the line
 	 *            ending
 	 * @throws UnsupportedEncodingException
 	 */
-	protected void foundDelimiter(List<Text> values, boolean takeDelimiterOut)
-			throws UnsupportedEncodingException {
+	protected void addCell(List<Text> values, boolean removeSeparator) throws UnsupportedEncodingException {
         // remove trailing LF or CR
         if (sb.length() > 0 && (sb.charAt(sb.length()-1) == '\n' || sb.charAt(sb.length()-1) == '\r')) {
             sb.deleteCharAt(sb.length()-1);
         }
-
-		// Found a real delimiter
-		Text text = new Text();
-		String val = (takeDelimiterOut) ? sb.substring(0, sb.length() - separator.length()) : sb.toString();
-		if (val.startsWith(delimiter) && val.endsWith(delimiter)) {
-			val = (val.length() - (2 * delimiter.length()) > 0) ? val.substring(delimiter.length(), val.length()
-					-  delimiter.length()) : "";
+		if (removeSeparator) {
+			sb.delete(sb.length() - separator.length(), sb.length());
 		}
-		text.append(val.getBytes("UTF-8"), 0, val.getBytes("UTF-8").length);
-		values.add(text);
+		if (sbStartsWith(delimiter) && sbEndsWith(delimiter)) {
+			sb.delete(sb.length() - delimiter.length(), sb.length());
+			sb.delete(0, delimiter.length());
+		}
+		values.add(new Text(sb.toString().getBytes("UTF-8")));
 		// Empty string buffer
 		sb.setLength(0);
+	}
+
+	private boolean sbStartsWith(String str) {
+		if (sb.length() < str.length()) {
+			return false;
+		}
+		char[] chars = str.toCharArray();
+		for (int i = 0; i < chars.length; i++) {
+			if (sb.charAt(i) != chars[i]) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	private boolean sbEndsWith(String str) {
+		if (sb.length() < str.length()) {
+			return false;
+		}
+		char[] chars = str.toCharArray();
+		for (int i = sb.length() - chars.length, j = 0; i < sb.length(); i++, j++) {
+			if (sb.charAt(i) != chars[j]) {
+				return false;
+			}
+		}
+		return true;
 	}
 
 	/*
@@ -214,25 +238,21 @@ public class CSVLineRecordReader extends RecordReader<LongWritable, List<Text>> 
 		start = split.getStart();
 		end = start + split.getLength();
 		final Path file = split.getPath();
-		CompressionCodecFactory compressionCodecs = new CompressionCodecFactory(job);
-		final CompressionCodec codec = compressionCodecs.getCodec(file);
 
 		// open the file and seek to the start of the split
-		FileSystem fs = file.getFileSystem(job);
-		FSDataInputStream fileIn = fs.open(split.getPath());
+		final FileSystem fs = file.getFileSystem(job);
+		FSDataInputStream fileIn = fs.open(file);
 
-		if (codec != null) {
-			is = codec.createInputStream(fileIn);
-			end = Long.MAX_VALUE;
+		CompressionCodec codec = new CompressionCodecFactory(job).getCodec(file);
+		if (null!=codec) {
+			LOG.error("CSVLineRecordReader does not support compression.");
+			throw new IOException("CSVLineRecordReader does not support compression.");
 		} else {
-			if (start != 0) {
-				fileIn.seek(start);
-			}
-			is = fileIn;
+			fileIn.seek(start);
 		}
 
-		this.pos = start;
-		init(is, job);
+		pos = start;
+		init(fileIn, job);
 	}
 
 	/*
@@ -241,35 +261,31 @@ public class CSVLineRecordReader extends RecordReader<LongWritable, List<Text>> 
 	 * @see org.apache.hadoop.mapreduce.RecordReader#nextKeyValue()
 	 */
 	public boolean nextKeyValue() throws IOException {
+		// we should have an exact split on a CSV line, so if the last call read a line we should have pos == end, so
+		// we shouldn't read any more since the next split will get it
+		if (pos >= end) {
+			key = null;
+			value = null;
+			return false;
+		}
 		if (key == null) {
 			key = new LongWritable();
 		}
 		key.set(pos);
-
 		if (value == null) {
 			value = new ArrayListTextWritable();
 		}
-		while (true) {
-			if (pos >= end)
-				return false;
-			int newSize;
-			newSize = readLine(value);
-			pos += newSize;
-			if (newSize == 0) {
-				if (isZipFile) {
-					ZipInputStream zis = (ZipInputStream) is;
-					if (zis.getNextEntry() != null) {
-						is = zis;
-						in = new BufferedReader(new InputStreamReader(is));
-						continue;
-					}
-				}
-				key = null;
-				value = null;
-				return false;
-			} else {
-				return true;
-			}
+		int size = readLine(value);
+		pos += size;
+		// size is 0 if EOF, although we should have exact splits...
+		if (size == 0) {
+			LOG.warn(String.format("Encountered EOF but expected to end on exact split boundary! pos=%d, start=%d, " +
+					"end=%d", pos, start, end));
+			key = null;
+			value = null;
+			return false;
+		} else {
+			return true;
 		}
 	}
 
@@ -315,10 +331,6 @@ public class CSVLineRecordReader extends RecordReader<LongWritable, List<Text>> 
 		if (in != null) {
 			in.close();
 			in = null;
-		}
-		if (is != null) {
-			is.close();
-			is = null;
 		}
 	}
 }
