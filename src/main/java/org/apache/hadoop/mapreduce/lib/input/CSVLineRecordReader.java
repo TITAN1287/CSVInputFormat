@@ -16,25 +16,14 @@
 
 package org.apache.hadoop.mapreduce.lib.input;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FSDataInputStream;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.Text;
-import org.apache.hadoop.io.compress.CompressionCodec;
-import org.apache.hadoop.io.compress.CompressionCodecFactory;
-import org.apache.hadoop.mapreduce.InputSplit;
-import org.apache.hadoop.mapreduce.RecordReader;
-import org.apache.hadoop.mapreduce.TaskAttemptContext;
 
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.io.Reader;
 import java.io.UnsupportedEncodingException;
 import java.util.List;
 
@@ -42,25 +31,14 @@ import java.util.List;
  * Reads a CSV line. CSV files could be multiline, as they may have line breaks
  * inside a column
  * 
- * @author mvallebr, tristen
+ * @author mvallebr, tristeng
  *
  * October, 2015: tristeng (tgeorgiou@phemi.com) updates to restrict delimiter and separator to single character,
- * support for carriage returns, support for UTF-8 multi-byte characters, support for unescaping double delimiters
+ * support for carriage returns, support for UTF-8 multi-byte characters, support for unescaping double delimiters.
+ * Also pushed much of the functionality into a parent class.
  * 
  */
-public class CSVLineRecordReader extends RecordReader<LongWritable, List<Text>> {
-    private static final Log LOG = LogFactory.getLog(CSVLineRecordReader.class);
-    public static final String FORMAT_DELIMITER = "mapreduce.csvinput.delimiter";
-    public static final String FORMAT_SEPARATOR = "mapreduce.csvinput.separator";
-    public static final String DEFAULT_DELIMITER = "\"";
-    public static final String DEFAULT_SEPARATOR = ",";
-
-    private long start;
-    private long pos;
-    private long end;
-    protected Reader in;
-    private LongWritable key = null;
-    private List<Text> value = null;
+public class CSVLineRecordReader extends CSVRecordReader<LongWritable, List<Text>> {
     private char delimiter;
     private char separator;
     private StringBuilder sb;
@@ -69,8 +47,7 @@ public class CSVLineRecordReader extends RecordReader<LongWritable, List<Text>> 
      * Default constructor is needed when called by reflection from hadoop
      *
      */
-    public CSVLineRecordReader() {
-    }
+    public CSVLineRecordReader() {}
 
     /**
      * Constructor to be called from FileInputFormat.createRecordReader
@@ -96,19 +73,36 @@ public class CSVLineRecordReader extends RecordReader<LongWritable, List<Text>> 
      *            - hadoop conf
      * @throws IOException
      */
+    @Override
     public void init(InputStream is, Configuration conf) throws IOException {
-        String delimiter = conf.get(FORMAT_DELIMITER, DEFAULT_DELIMITER);
+        String delimiter = conf.get(CSVFileInputFormat.FORMAT_DELIMITER,
+                CSVFileInputFormat.DEFAULT_DELIMITER);
         if (delimiter.length() != 1) {
-            throw new IOException("The delimiter can only be a single character.");
+            throw new IOException("CSVLineRecordReader: The delimiter can only be a single character.");
         }
         this.delimiter = delimiter.charAt(0);
-        String separator = conf.get(FORMAT_SEPARATOR, DEFAULT_SEPARATOR);
+        String separator = conf.get(CSVFileInputFormat.FORMAT_SEPARATOR,
+                CSVFileInputFormat.DEFAULT_SEPARATOR);
         if (separator.length() != 1) {
-            throw new IOException("The separator can only be a single character.");
+            throw new IOException("CSVLineRecordReader: The separator can only be a single character.");
+        }
+        if (delimiter.equals(separator)) {
+            throw new IOException("CSVLineRecordReader: delimiter and separator cannot be the same character");
         }
         this.separator = separator.charAt(0);
         this.in = new BufferedReader(new InputStreamReader(is, "UTF-8"));
         this.sb = new StringBuilder();
+    }
+
+    @Override
+    protected void initKeyAndValue() {
+        if (key == null) {
+            key = new LongWritable();
+        }
+        key.set(pos);
+        if (value == null) {
+            value = new ArrayListTextWritable();
+        }
     }
 
     /**
@@ -120,6 +114,7 @@ public class CSVLineRecordReader extends RecordReader<LongWritable, List<Text>> 
      * @return number of chars processed from the stream
      * @throws IOException
      */
+    @Override
     protected int readLine(List<Text> values) throws IOException {
         values.clear(); // Empty value columns list
         char c;
@@ -198,129 +193,22 @@ public class CSVLineRecordReader extends RecordReader<LongWritable, List<Text>> 
      */
     protected void addCell(List<Text> values, boolean removeSeparator) throws UnsupportedEncodingException {
         // remove trailing LF or CR
-        if (sb.length() > 0 && (sb.charAt(sb.length()-1) == '\n' || sb.charAt(sb.length()-1) == '\r')) {
-            sb.deleteCharAt(sb.length()-1);
+        int lastIndex = sb.length()-1;
+        if (sb.length() > 0 && (sb.charAt(lastIndex) == '\n' || sb.charAt(lastIndex) == '\r')) {
+            sb.deleteCharAt(lastIndex);
+            lastIndex--;
         }
         // NOTE: it's possible that this cell ends in a separator, which is why we don't auto-remove it
         if (removeSeparator) {
-            sb.delete(sb.length() - 1, sb.length());
+            sb.delete(lastIndex, sb.length());
+            lastIndex--;
         }
-        if (sb.length() > 1 && sb.charAt(0) == delimiter && sb.charAt(sb.length()-1) == delimiter) {
-            sb.delete(sb.length() - 1, sb.length());
+        if (sb.length() > 1 && sb.charAt(0) == delimiter && sb.charAt(lastIndex) == delimiter) {
+            sb.delete(lastIndex, sb.length());
             sb.delete(0, 1);
         }
         values.add(new Text(sb.toString().getBytes("UTF-8")));
         // Empty string buffer
         sb.setLength(0);
-    }
-
-    /*
-     * (non-Javadoc)
-     *
-     * @see
-     * org.apache.hadoop.mapreduce.RecordReader#initialize(org.apache.hadoop
-     * .mapreduce.InputSplit, org.apache.hadoop.mapreduce.TaskAttemptContext)
-     */
-    public void initialize(InputSplit genericSplit, TaskAttemptContext context) throws IOException {
-        FileSplit split = (FileSplit) genericSplit;
-        Configuration job = context.getConfiguration();
-
-        start = split.getStart();
-        end = start + split.getLength();
-        final Path file = split.getPath();
-
-        // open the file and seek to the start of the split
-        final FileSystem fs = file.getFileSystem(job);
-        FSDataInputStream fileIn = fs.open(file);
-
-        CompressionCodec codec = new CompressionCodecFactory(job).getCodec(file);
-        if (null!=codec) {
-            LOG.error("CSVLineRecordReader does not support compression.");
-            throw new IOException("CSVLineRecordReader does not support compression.");
-        } else {
-            fileIn.seek(start);
-        }
-
-        pos = start;
-        init(fileIn, job);
-    }
-
-    /*
-     * (non-Javadoc)
-     *
-     * @see org.apache.hadoop.mapreduce.RecordReader#nextKeyValue()
-     */
-    public boolean nextKeyValue() throws IOException {
-        // we should have an exact split on a CSV line, so if the last call read a line we should have pos == end, so
-        // we shouldn't read any more since the next split will get it
-        if (pos >= end) {
-            key = null;
-            value = null;
-            return false;
-        }
-        if (key == null) {
-            key = new LongWritable();
-        }
-        key.set(pos);
-        if (value == null) {
-            value = new ArrayListTextWritable();
-        }
-        int size = readLine(value);
-        pos += size;
-        // size is 0 if EOF, although we should have exact splits...
-        if (size == 0) {
-            LOG.warn(String.format("Encountered EOF but expected to end on exact split boundary! pos=%d, start=%d, " +
-                    "end=%d", pos, start, end));
-            key = null;
-            value = null;
-            return false;
-        } else {
-            return true;
-        }
-    }
-
-    /*
-     * (non-Javadoc)
-     *
-     * @see org.apache.hadoop.mapreduce.RecordReader#getCurrentKey()
-     */
-    @Override
-    public LongWritable getCurrentKey() {
-        return key;
-    }
-
-    /*
-     * (non-Javadoc)
-     *
-     * @see org.apache.hadoop.mapreduce.RecordReader#getCurrentValue()
-     */
-    @Override
-    public List<Text> getCurrentValue() {
-        return value;
-    }
-
-    /*
-     * (non-Javadoc)
-     *
-     * @see org.apache.hadoop.mapreduce.RecordReader#getProgress()
-     */
-    public float getProgress() {
-        if (start == end) {
-            return 0.0f;
-        } else {
-            return Math.min(1.0f, (pos - start) / (float) (end - start));
-        }
-    }
-
-    /*
-     * (non-Javadoc)
-     *
-     * @see org.apache.hadoop.mapreduce.RecordReader#close()
-     */
-    public synchronized void close() throws IOException {
-        if (in != null) {
-            in.close();
-            in = null;
-        }
     }
 }

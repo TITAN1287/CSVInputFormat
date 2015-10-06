@@ -17,13 +17,11 @@
 package org.apache.hadoop.mapreduce.lib.input;
 
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.Text;
-import org.apache.hadoop.mapreduce.InputSplit;
-import org.apache.hadoop.mapreduce.JobID;
-import org.apache.hadoop.mapreduce.RecordReader;
-import org.apache.hadoop.mapreduce.TaskAttemptContext;
-import org.apache.hadoop.mapreduce.TaskAttemptID;
+import org.apache.hadoop.mapred.FileSplit;
+import org.apache.hadoop.mapreduce.*;
 import org.apache.hadoop.mapreduce.task.JobContextImpl;
 import org.apache.hadoop.mapreduce.task.TaskAttemptContextImpl;
 import org.junit.Before;
@@ -165,25 +163,34 @@ public class CSVNLineInputFormatTest {
     @Test(expected = IOException.class)
     public void testBadSeparator() throws Exception {
         Configuration conf = createConfig("./fixtures/teste2.csv");
-        conf.set(CSVLineRecordReader.FORMAT_SEPARATOR, "abcd");
+        conf.set(CSVFileInputFormat.FORMAT_SEPARATOR, "abcd");
         CSVNLineInputFormat inputFormat = new CSVNLineInputFormat();
-        inputFormat.getSplits(new JobContextImpl(conf, new JobID()));
+        TaskAttemptContext context = new TaskAttemptContextImpl(conf, new TaskAttemptID());
+        InputSplit split = new FileSplit(new Path("/some/file.csv"), 0, 10, new String[0]);
+        inputFormat.createRecordReader(split, context);
     }
 
     @Test(expected = IOException.class)
     public void testBadDelimiter() throws Exception {
         Configuration conf = createConfig("./fixtures/teste2.csv");
-        conf.set(CSVLineRecordReader.FORMAT_DELIMITER, "abcd");
+        conf.set(CSVFileInputFormat.FORMAT_DELIMITER, "abcd");
         CSVNLineInputFormat inputFormat = new CSVNLineInputFormat();
         inputFormat.getSplits(new JobContextImpl(conf, new JobID()));
+    }
+
+    @Test
+    public void testSetFunction() throws Exception {
+        Job job = Job.getInstance();
+        CSVNLineInputFormat.setNumLinesPerSplit(job, 10);
+        assertEquals(10, CSVNLineInputFormat.getNumLinesPerSplit(job));
     }
 
     private Configuration createConfig(String fileName) {
         Configuration conf = new Configuration();
 
         conf.setStrings("mapred.input.dir", fileName);
-        conf.set(CSVLineRecordReader.FORMAT_DELIMITER, "\"");
-        conf.set(CSVLineRecordReader.FORMAT_SEPARATOR, ",");
+        conf.set(CSVFileInputFormat.FORMAT_DELIMITER, "\"");
+        conf.set(CSVFileInputFormat.FORMAT_SEPARATOR, ",");
         conf.setInt(CSVNLineInputFormat.LINES_PER_MAP, 40000);
 
         return conf;

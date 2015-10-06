@@ -44,10 +44,9 @@ import org.apache.hadoop.mapreduce.TaskAttemptContext;
  * October, 2015: tristeng (tgeorgiou@phemi.com) updated split functionality based on changes made to the
  * CSVLineRecordReader
  */
-public class CSVNLineInputFormat extends FileInputFormat<LongWritable, List<Text>> {
+public class CSVNLineInputFormat extends CSVFileInputFormat<LongWritable, List<Text>> {
 
     public static final String LINES_PER_MAP = "mapreduce.input.lineinputformat.linespermap";
-
     public static final int DEFAULT_LINES_PER_MAP = 1;
 
     /*
@@ -62,12 +61,17 @@ public class CSVNLineInputFormat extends FileInputFormat<LongWritable, List<Text
     public RecordReader<LongWritable, List<Text>> createRecordReader(InputSplit split, TaskAttemptContext context)
             throws IOException {
         Configuration conf = context.getConfiguration();
-        String quote = conf.get(CSVLineRecordReader.FORMAT_DELIMITER, CSVLineRecordReader.DEFAULT_DELIMITER);
-        String separator = conf.get(CSVLineRecordReader.FORMAT_SEPARATOR, CSVLineRecordReader.DEFAULT_SEPARATOR);
-        if (null == quote || null == separator) {
-            throw new IOException("CSVTextInputFormat: missing parameter delimiter/separator");
+        String delimiter = conf.get(FORMAT_DELIMITER, DEFAULT_DELIMITER);
+        String separator = conf.get(FORMAT_SEPARATOR, DEFAULT_SEPARATOR);
+        if (null == delimiter || null == separator) {
+            throw new IOException("CSVNLineInputFormat: missing parameter delimiter/separator");
         }
-        context.setStatus(split.toString());
+        if (delimiter.length() != 1 || separator.length() != 1) {
+            throw new IOException("CSVNLineInputFormat: delimiter/separator can only be a single character");
+        }
+        if (delimiter.equals(separator)) {
+            throw new IOException("CSVNLineInputFormat: delimiter and separator cannot be the same character");
+        }
         return new CSVLineRecordReader();
     }
 
@@ -77,6 +81,7 @@ public class CSVNLineInputFormat extends FileInputFormat<LongWritable, List<Text
      *
      * @see FileInputFormat#getSplits(JobContext)
      */
+    @Override
     public List<InputSplit> getSplits(JobContext job) throws IOException {
         List<InputSplit> splits = new ArrayList<InputSplit>();
         int numLinesPerSplit = getNumLinesPerSplit(job);
@@ -108,16 +113,16 @@ public class CSVNLineInputFormat extends FileInputFormat<LongWritable, List<Text
             throw new IOException("Not a file: " + fileName);
         }
         FileSystem fs = fileName.getFileSystem(conf);
-        CSVLineRecordReader lr = null;
+        CSVRawLineRecordReader lr = null;
         try {
             FSDataInputStream in = fs.open(fileName);
-            lr = new CSVLineRecordReader(in, conf);
-            List<Text> line = new ArrayList<Text>();
+            lr = new CSVRawLineRecordReader(in, conf);
+            Text row = new Text();
             int numLines = 0;
             long begin = 0;
             long length = 0;
             int size;
-            while ((size = lr.readLine(line)) > 0) {
+            while ((size = lr.readLine(row)) > 0) {
                 numLines++;
                 length += size;
                 if (numLines == numLinesPerSplit) {
@@ -136,18 +141,6 @@ public class CSVNLineInputFormat extends FileInputFormat<LongWritable, List<Text
             }
         }
         return splits;
-    }
-
-    /*
-     * (non-Javadoc)
-     *
-     * @see
-     * org.apache.hadoop.mapreduce.lib.input.FileInputFormat#isSplitable(org
-     * .apache.hadoop.mapreduce.JobContext, org.apache.hadoop.fs.Path)
-     */
-    @Override
-    protected boolean isSplitable(JobContext context, Path filename) {
-        return true;
     }
 
     /**
@@ -172,5 +165,4 @@ public class CSVNLineInputFormat extends FileInputFormat<LongWritable, List<Text
     public static int getNumLinesPerSplit(JobContext job) {
         return job.getConfiguration().getInt(LINES_PER_MAP, DEFAULT_LINES_PER_MAP);
     }
-
 }

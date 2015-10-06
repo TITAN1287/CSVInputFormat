@@ -28,13 +28,13 @@ import java.util.List;
 
 import static org.junit.Assert.assertEquals;
 
-public class CSVTextInputFormatTest {
+public class CSVRawTextInputFormatTest {
 
     @Test
     public void testSmallFileSplit() throws Exception {
         Configuration conf = createConfig("./fixtures/bull.csv");
         conf.set(CSVFileInputFormat.FORMAT_SEPARATOR, ";");
-        CSVTextInputFormat inputFormat = new CSVTextInputFormat();
+        CSVRawTextInputFormat inputFormat = new CSVRawTextInputFormat();
         List<InputSplit> actualSplits = inputFormat.getSplits(new JobContextImpl(conf, new JobID()));
         assertEquals(1, actualSplits.size());
     }
@@ -48,48 +48,45 @@ public class CSVTextInputFormatTest {
         conf.setLong(FileInputFormat.SPLIT_MAXSIZE, splitSize);
         TaskAttemptContext context = new TaskAttemptContextImpl(conf, new TaskAttemptID());
 
-        CSVTextInputFormat inputFormat = new CSVTextInputFormat();
+        CSVRawTextInputFormat inputFormat = new CSVRawTextInputFormat();
         List<InputSplit> actualSplits = inputFormat.getSplits(new JobContextImpl(conf, new JobID()));
         assertEquals(5, actualSplits.size());
 
         // let's make sure our last split has sane lines - the last split has the last 3 lines of the file
-        RecordReader<LongWritable, List<Text>> recordReader =
+        RecordReader<LongWritable, Text> recordReader =
                 inputFormat.createRecordReader(actualSplits.get(4), context);
 
         recordReader.initialize(actualSplits.get(4), context);
 
         recordReader.nextKeyValue();
-        List<Text> line1 = recordReader.getCurrentValue();
+        Text line1 = recordReader.getCurrentValue();
 
-        assertEquals(15, line1.size());
-        assertEquals("38", line1.get(0).toString());
-        assertEquals("22833930510", line1.get(1).toString());
-        assertEquals("Fernanda", line1.get(2).toString());
-        assertEquals("Santos", line1.get(3).toString());
-        assertEquals("19/03/85", line1.get(4).toString());
-        assertEquals("22/02/13", line1.get(5).toString());
-        assertEquals("E", line1.get(6).toString());
-        assertEquals("Inadimplente", line1.get(7).toString());
-        assertEquals("21/03/13", line1.get(8).toString());
-        assertEquals("1,9", line1.get(9).toString());
-        assertEquals("92", line1.get(10).toString());
-        assertEquals("Negro", line1.get(11).toString());
-        assertEquals("Sorocaba", line1.get(12).toString());
-        assertEquals("FIAT", line1.get(13).toString());
-        assertEquals("2010", line1.get(14).toString());
+        assertEquals("38;22833930510;Fernanda;Santos;19/03/85;22/02/13;E;Inadimplente;21/03/13;1,9;92;Negro;Sorocaba;FIAT;2010",
+                line1.toString());
 
         recordReader.nextKeyValue();
-        List<Text> line2 = recordReader.getCurrentValue();
+        Text line2 = recordReader.getCurrentValue();
 
-        assertEquals(15, line2.size());
+        assertEquals("39;22833930500;Fernando;Parreira;21/03/81;15/03/13;F;Adimplente;25/04/13;1,92;65;Branca;Ribeir\u008Bo Preto;Hyundai;2012",
+                line2.toString());
 
         recordReader.nextKeyValue();
-        List<Text> line3 = recordReader.getCurrentValue();
+        Text line3 = recordReader.getCurrentValue();
 
-        assertEquals(15, line3.size());
+        assertEquals("40;22833930490;Josefina;Ramalho;07/03/90;05/01/13;F;Adimplente;22/04/13;2;100;Branca;Conc\u0097rdia;Hyundai;2013",
+                line3.toString());
 
         // we shouldn't have any more lines to process
         assertEquals(false, recordReader.nextKeyValue());
+    }
+
+    @Test
+    public void testSetFunction() throws Exception {
+        Job job = Job.getInstance();
+        CSVRawTextInputFormat.setDelimiter(job, "'");
+        CSVRawTextInputFormat.setSeparator(job, ";");
+        assertEquals("'", CSVRawTextInputFormat.getDelimiter(job));
+        assertEquals(";", CSVRawTextInputFormat.getSeparator(job));
     }
 
     private Configuration createConfig(String fileName) {
