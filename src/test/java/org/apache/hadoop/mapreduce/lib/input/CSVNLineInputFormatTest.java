@@ -13,6 +13,7 @@ import org.apache.hadoop.mapreduce.task.TaskAttemptContextImpl;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.io.IOException;
 import java.util.List;
 
 import static org.junit.Assert.assertEquals;
@@ -31,6 +32,8 @@ public class CSVNLineInputFormatTest {
 
         CSVNLineInputFormat inputFormat = new CSVNLineInputFormat();
         List<InputSplit> actualSplits = inputFormat.getSplits(new JobContextImpl(conf, new JobID()));
+
+        assertEquals(3, actualSplits.size());
 
         RecordReader<LongWritable, List<Text>> recordReader =
                 inputFormat.createRecordReader(actualSplits.get(1), context);
@@ -53,6 +56,8 @@ public class CSVNLineInputFormatTest {
 
         CSVNLineInputFormat inputFormat = new CSVNLineInputFormat();
         List<InputSplit> actualSplits = inputFormat.getSplits(new JobContextImpl(conf, new JobID()));
+
+        assertEquals(3, actualSplits.size());
 
         RecordReader<LongWritable, List<Text>> recordReader =
                 inputFormat.createRecordReader(actualSplits.get(1), context);
@@ -133,6 +138,22 @@ public class CSVNLineInputFormatTest {
         assertEquals("Джек Экзампл", thirdLineValue.get(0).toString());
         assertEquals("1 улица Экзампл, Экзамплвиль, Австралия.\n2615", thirdLineValue.get(1).toString());
         assertEquals("jack@example.com", thirdLineValue.get(2).toString());
+    }
+
+    @Test(expected = IOException.class)
+    public void testBadSeparator() throws Exception {
+        Configuration conf = createConfig("./fixtures/teste2.csv");
+        conf.set(CSVLineRecordReader.FORMAT_SEPARATOR, "abcd");
+        CSVNLineInputFormat inputFormat = new CSVNLineInputFormat();
+        inputFormat.getSplits(new JobContextImpl(conf, new JobID()));
+    }
+
+    @Test(expected = IOException.class)
+    public void testBadDelimiter() throws Exception {
+        Configuration conf = createConfig("./fixtures/teste2.csv");
+        conf.set(CSVLineRecordReader.FORMAT_DELIMITER, "abcd");
+        CSVNLineInputFormat inputFormat = new CSVNLineInputFormat();
+        inputFormat.getSplits(new JobContextImpl(conf, new JobID()));
     }
 
     private Configuration createConfig(String fileName) {

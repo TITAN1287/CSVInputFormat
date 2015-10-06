@@ -23,8 +23,10 @@ import org.apache.hadoop.mapreduce.TaskAttemptContext;
  * implements the getSplits method so splits are made by lines
  * 
  * 
- * @author mvallebr
- * 
+ * @author mvallebr, tristeng
+ *
+ * October, 2015: tristeng (tgeorgiou@phemi.com) updated split functionality based on changes made to the
+ * CSVLineRecordReader
  */
 public class CSVNLineInputFormat extends FileInputFormat<LongWritable, List<Text>> {
 

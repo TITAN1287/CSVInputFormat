@@ -26,7 +26,10 @@ import java.util.List;
  * Reads a CSV line. CSV files could be multiline, as they may have line breaks
  * inside a column
  * 
- * @author mvallebr
+ * @author mvallebr, tristen
+ *
+ * October, 2015: tristeng (tgeorgiou@phemi.com) updates to restrict delimiter and separator to single character,
+ * support for carriage returns, support for UTF-8 multi-byte characters, support for unescaping double delimiters
  * 
  */
 public class CSVLineRecordReader extends RecordReader<LongWritable, List<Text>> {
@@ -42,9 +45,9 @@ public class CSVLineRecordReader extends RecordReader<LongWritable, List<Text>> 
 	protected Reader in;
 	private LongWritable key = null;
 	private List<Text> value = null;
-	private String delimiter;
-	private String separator;
-	private StringBuffer sb;
+	private char delimiter;
+	private char separator;
+	private StringBuilder sb;
 
 	/**
 	 * Default constructor is needed when called by reflection from hadoop
@@ -78,10 +81,18 @@ public class CSVLineRecordReader extends RecordReader<LongWritable, List<Text>> 
 	 * @throws IOException
 	 */
 	public void init(InputStream is, Configuration conf) throws IOException {
-		this.delimiter = conf.get(FORMAT_DELIMITER, DEFAULT_DELIMITER);
-		this.separator = conf.get(FORMAT_SEPARATOR, DEFAULT_SEPARATOR);
+		String delimiter = conf.get(FORMAT_DELIMITER, DEFAULT_DELIMITER);
+		if (delimiter.length() != 1) {
+			throw new IOException("The delimiter can only be a single character.");
+		}
+		this.delimiter = delimiter.charAt(0);
+		String separator = conf.get(FORMAT_SEPARATOR, DEFAULT_SEPARATOR);
+		if (separator.length() != 1) {
+			throw new IOException("The separator can only be a single character.");
+		}
+		this.separator = separator.charAt(0);
 		this.in = new BufferedReader(new InputStreamReader(is, "UTF-8"));
-		this.sb = new StringBuffer();
+		this.sb = new StringBuilder();
 	}
 
 	/**
@@ -101,7 +112,6 @@ public class CSVLineRecordReader extends RecordReader<LongWritable, List<Text>> 
 		// Empty string buffer
 		sb.setLength(0);
 		int i;
-		int quoteOffset = 0, delimiterOffset = 0;
 		boolean lastCharWasDelimiter = false;
 		// Reads each char from input stream unless eof was reached
 		while ((i = in.read()) != -1) {
@@ -128,7 +138,7 @@ public class CSVLineRecordReader extends RecordReader<LongWritable, List<Text>> 
 			}
 			sb.append(c);
 			// Check quotes, as delimiter inside quotes don't count
-			if (c == delimiter.charAt(quoteOffset)) {
+			if (c == delimiter) {
 				// if the last character was a delimiter AND the current character is a delimiter, delete the last
 				// character as it is an escape character (i.e. when someone wants a double quote in their value,
 				// it becomes escaped with another double quote, if the real value is 'a string with "double quotes"'
@@ -139,25 +149,14 @@ public class CSVLineRecordReader extends RecordReader<LongWritable, List<Text>> 
 				} else {
 					lastCharWasDelimiter = true;
 				}
-				quoteOffset++;
-				if (quoteOffset >= delimiter.length()) {
-					insideQuote = !insideQuote;
-					quoteOffset = 0;
-				}
+				insideQuote = !insideQuote;
 			} else {
-				quoteOffset = 0;
 				lastCharWasDelimiter = false;
 			}
 			// Check delimiters, but only those outside of quotes
 			if (!insideQuote) {
-				if (c == separator.charAt(delimiterOffset)) {
-					delimiterOffset++;
-					if (delimiterOffset >= separator.length()) {
-						addCell(values, true);
-						delimiterOffset = 0;
-					}
-				} else {
-					delimiterOffset = 0;
+				if (c == separator) {
+					addCell(values, true);
 				}
 				// A new line outside of a quote is a real csv line breaker
 				if (c == '\n' || c == '\r') {
@@ -186,42 +185,17 @@ public class CSVLineRecordReader extends RecordReader<LongWritable, List<Text>> 
         if (sb.length() > 0 && (sb.charAt(sb.length()-1) == '\n' || sb.charAt(sb.length()-1) == '\r')) {
             sb.deleteCharAt(sb.length()-1);
         }
+		// NOTE: it's possible that this cell ends in a separator, which is why we don't auto-remove it
 		if (removeSeparator) {
-			sb.delete(sb.length() - separator.length(), sb.length());
+			sb.delete(sb.length() - 1, sb.length());
 		}
-		if (sbStartsWith(delimiter) && sbEndsWith(delimiter)) {
-			sb.delete(sb.length() - delimiter.length(), sb.length());
-			sb.delete(0, delimiter.length());
+		if (sb.length() > 1 && sb.charAt(0) == delimiter && sb.charAt(sb.length()-1) == delimiter) {
+			sb.delete(sb.length() - 1, sb.length());
+			sb.delete(0, 1);
 		}
 		values.add(new Text(sb.toString().getBytes("UTF-8")));
 		// Empty string buffer
 		sb.setLength(0);
-	}
-
-	private boolean sbStartsWith(String str) {
-		if (sb.length() < str.length()) {
-			return false;
-		}
-		char[] chars = str.toCharArray();
-		for (int i = 0; i < chars.length; i++) {
-			if (sb.charAt(i) != chars[i]) {
-				return false;
-			}
-		}
-		return true;
-	}
-
-	private boolean sbEndsWith(String str) {
-		if (sb.length() < str.length()) {
-			return false;
-		}
-		char[] chars = str.toCharArray();
-		for (int i = sb.length() - chars.length, j = 0; i < sb.length(); i++, j++) {
-			if (sb.charAt(i) != chars[j]) {
-				return false;
-			}
-		}
-		return true;
 	}
 
 	/*
