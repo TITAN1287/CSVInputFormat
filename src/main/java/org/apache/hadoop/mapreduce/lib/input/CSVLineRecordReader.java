@@ -183,7 +183,7 @@ public class CSVLineRecordReader extends RecordReader<LongWritable, List<Text>> 
 	protected void foundDelimiter(List<Text> values, boolean takeDelimiterOut)
 			throws UnsupportedEncodingException {
         // remove trailing LF or CR
-        if (sb.length() > 0 && sb.charAt(sb.length()-1) == '\n' || sb.charAt(sb.length()-1) == '\r') {
+        if (sb.length() > 0 && (sb.charAt(sb.length()-1) == '\n' || sb.charAt(sb.length()-1) == '\r')) {
             sb.deleteCharAt(sb.length()-1);
         }
 
