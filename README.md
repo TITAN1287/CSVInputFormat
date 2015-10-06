@@ -1,13 +1,18 @@
 CSVInputFormat
 ==============
 
-Input format for hadoop able to read multiline CSVs
+CSV input format for Hadoop. Handles delimited cells that contain separators, newlines and UTF-8 encoding. Delimiters in
+a delimited string should be represented as 2 of the characters (this library will replace the double delimiter with a
+single character in the output).
 
-Run BasicTest.java to see it working. Check src/test/resource/test.csv to see a multiline demofile.
+CSVInputFormat will split automatically using an algorithm similar to FileInputFormat. CSVNLineInputFormat will split
+based on a configurable number of lines.
 
-The key returned is the file position where the line starts and the value is a List with the column values
+The output key is the position in the file where the row begins and the output value is a list of strings that contain
+each cells content.
 
-Zip files are supported.
+Configuration supports custom separator and delimiter characters and if using the CSVNLineInputFormat, custom number of
+lines to split on.
 
 More ideas to improve this are welcome.
 
@@ -40,7 +45,7 @@ The output is as follows:
 	==> val[2] = jim@sample.com
 
 	==> TestMapper
-	==> key=10
+	==> key=100
 	==> val[0] = Jack Example
 	==> val[1] = 1 Example Street, Exampleville, Australia. 261
 	==> val[2] = jack@example.com
