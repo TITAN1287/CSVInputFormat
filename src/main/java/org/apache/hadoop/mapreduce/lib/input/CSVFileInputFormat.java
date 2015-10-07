@@ -34,7 +34,7 @@ import static java.util.concurrent.TimeUnit.MILLISECONDS;
 /**
  * File input format that can create splits on CSV files
  *
- * @author tristeng (tgeorgio@phemi.com)
+ * @author tristeng (tgeorgiou@phemi.com)
  *
  * @param <K> the key to emit
  * @param <V> the value to emit

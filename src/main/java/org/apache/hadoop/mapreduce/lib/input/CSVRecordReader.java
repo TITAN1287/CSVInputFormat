@@ -32,6 +32,14 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.Reader;
 
+/**
+ * Base clase for reading CSV records
+ *
+ * @author tristeng (tgeorgiou@phemi.com)
+ *
+ * @param <K> the key to emit
+ * @param <V> the value to emit
+ */
 public abstract class CSVRecordReader<K, V> extends RecordReader<K, V> {
     private static final Log LOG = LogFactory.getLog(CSVRecordReader.class);
 
