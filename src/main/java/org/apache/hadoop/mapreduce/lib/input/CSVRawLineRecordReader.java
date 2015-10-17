@@ -36,10 +36,22 @@ public class CSVRawLineRecordReader extends CSVRecordReader<LongWritable, Text> 
 
     public CSVRawLineRecordReader() {}
 
+    /**
+     * Constructor used to manually set a stream and configuration (mostly for testing)
+     * @param is the input stream
+     * @param conf the configuration
+     * @throws IOException
+     */
     public CSVRawLineRecordReader(InputStream is, Configuration conf) throws IOException {
         init(is, conf);
     }
 
+    /**
+     * Initializes this record reader
+     * @param is the input stream for the CSV file
+     * @param conf the job configuration
+     * @throws IOException
+     */
     @Override
     public void init(InputStream is, Configuration conf) throws IOException {
         String delimiter = conf.get(CSVFileInputFormat.FORMAT_DELIMITER,
@@ -63,6 +75,13 @@ public class CSVRawLineRecordReader extends CSVRecordReader<LongWritable, Text> 
         }
     }
 
+    /**
+     * Reads a raw CSV Line from a file; note that this algorithm is simpler than the {@link CSVLineRecordReader} since
+     * it doesn't care about content within a record, it simply cares about finding the end of a record
+     * @param csvRow used to store the raw CSV line
+     * @return the number of bytes read
+     * @throws IOException
+     */
     @Override
     protected int readLine(Text csvRow) throws IOException {
         char c;
@@ -111,6 +130,11 @@ public class CSVRawLineRecordReader extends CSVRecordReader<LongWritable, Text> 
         int lastIndex = sb.length() - 1;
         if (sb.length() > 0 && (sb.charAt(lastIndex) == '\n' || sb.charAt(lastIndex) == '\r')) {
             sb.deleteCharAt(lastIndex);
+        }
+        // if we hit eof and read some bytes but our buffer is empty, return that we read 0
+        // if we don't the input format will emit another record, but it will be empty
+        if (i == -1 && sb.length() == 0) {
+            return 0;
         }
         csvRow.set(sb.toString().getBytes("UTF-8"));
         return numRead;

@@ -175,6 +175,11 @@ public class CSVLineRecordReader extends CSVRecordReader<LongWritable, List<Text
                 }
             }
         }
+        // if we hit EOF, but we have read no values and our buffer is empty, return that we read nothing
+        // if we don't the input format will emit another record, but it will be empty
+        if (i == -1 && values.size() == 0 && sb.length() == 0) {
+            return 0;
+        }
         addCell(values, false);
         return numRead;
     }
