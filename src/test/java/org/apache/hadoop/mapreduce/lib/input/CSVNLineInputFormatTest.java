@@ -181,8 +181,13 @@ public class CSVNLineInputFormatTest {
     @Test
     public void testSetFunction() throws Exception {
         Job job = Job.getInstance();
+        // check defaults first
+        assertEquals(CSVNLineInputFormat.DEFAULT_LINES_PER_MAP, CSVNLineInputFormat.getNumLinesPerSplit(job));
+        assertEquals(CSVNLineInputFormat.DEFAULT_ENCODING, CSVNLineInputFormat.getTextEncoding(job));
         CSVNLineInputFormat.setNumLinesPerSplit(job, 10);
+        CSVNLineInputFormat.setTextEncoding(job, "ISO-8859-1");
         assertEquals(10, CSVNLineInputFormat.getNumLinesPerSplit(job));
+        assertEquals("ISO-8859-1", CSVRawTextInputFormat.getTextEncoding(job));
     }
 
     private Configuration createConfig(String fileName) {

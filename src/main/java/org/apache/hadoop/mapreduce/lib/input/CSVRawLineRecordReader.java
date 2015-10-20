@@ -60,7 +60,7 @@ public class CSVRawLineRecordReader extends CSVRecordReader<LongWritable, Text> 
             throw new IOException("The delimiter can only be a single character.");
         }
         this.delimiter = delimiter.charAt(0);
-        in = new BufferedReader(new InputStreamReader(is, "UTF-8"));
+        in = getReader(is, conf);
         this.sb = new StringBuilder();
     }
 
@@ -94,18 +94,7 @@ public class CSVRawLineRecordReader extends CSVRecordReader<LongWritable, Text> 
         while ((i = in.read()) != -1) {
             // it is very important this value reflects the exact number of bytes read, otherwise the CSVTextInputFormat
             // getSplits() function would break
-            numRead++;
-            // if we read a utf-8 character, we need to account for it's size in bytes
-            // see https://en.wikipedia.org/wiki/UTF-8 (5 and 6 byte characters are no longer part of utf-8, RFC 3629)
-            if (i > 0x007F) { // 127
-                numRead++;
-            }
-            if (i > 0x07FF) { // 2047
-                numRead++;
-            }
-            if (i > 0xFFFF) { // 65535
-                numRead++;
-            }
+            numRead = bytesReadForCharacter(i, numRead);
             c = (char) i;
             // if our buffer is empty and we encounter a linefeed or carriage return, it likely means the file uses
             // both, and we just finished the previous line on one or the other, so just ignore it until we get some

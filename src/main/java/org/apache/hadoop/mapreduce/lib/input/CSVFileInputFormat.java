@@ -45,8 +45,15 @@ public abstract class CSVFileInputFormat<K, V> extends FileInputFormat<K, V> {
 
     public static final String FORMAT_DELIMITER = "mapreduce.csvinput.delimiter";
     public static final String FORMAT_SEPARATOR = "mapreduce.csvinput.separator";
+    public static final String FORMAT_ENCODING = "mapreduce.csvinput.encoding";
     public static final String DEFAULT_DELIMITER = "\"";
     public static final String DEFAULT_SEPARATOR = ",";
+    public static final String DEFAULT_ENCODING = "UTF-8";
+    // we only support ISO-8859-1 and UTF-8 (we default to the recommended UTF-8 in absentia)
+    public static final String[] SUPPORTED_ENCODINGS = new String[] {
+            DEFAULT_ENCODING,
+            "ISO-8859-1"
+    };
 
     /**
      * Very similar to the FileInputFormat implementation but makes sure to split on a CSV row boundary. Since we have
@@ -158,5 +165,13 @@ public abstract class CSVFileInputFormat<K, V> extends FileInputFormat<K, V> {
 
     public static String getSeparator(Job job) {
         return job.getConfiguration().get(FORMAT_SEPARATOR, DEFAULT_SEPARATOR);
+    }
+
+    public static void setTextEncoding(Job job, String encoding) {
+        job.getConfiguration().set(FORMAT_ENCODING, encoding);
+    }
+
+    public static String getTextEncoding(Job job) {
+        return job.getConfiguration().get(FORMAT_ENCODING, DEFAULT_ENCODING);
     }
 }

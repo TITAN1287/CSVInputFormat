@@ -24,6 +24,8 @@ import org.apache.hadoop.mapreduce.task.JobContextImpl;
 import org.apache.hadoop.mapreduce.task.TaskAttemptContextImpl;
 import org.junit.Test;
 
+import java.io.UnsupportedEncodingException;
+import java.nio.charset.CharacterCodingException;
 import java.util.List;
 
 import static org.junit.Assert.assertEquals;
@@ -90,6 +92,87 @@ public class CSVTextInputFormatTest {
 
         // we shouldn't have any more lines to process
         assertEquals(false, recordReader.nextKeyValue());
+    }
+
+    @Test
+    public void testLatin1Encoding() throws Exception {
+        long splitSize = 512;
+        Configuration conf = createConfig("./fixtures/latin1.csv");
+        conf.setLong(FileInputFormat.SPLIT_MAXSIZE, splitSize);
+        conf.set(CSVTextInputFormat.FORMAT_ENCODING, "ISO-8859-1");
+        CSVTextInputFormat inputFormat = new CSVTextInputFormat();
+        List<InputSplit> actualSplits = inputFormat.getSplits(new JobContextImpl(conf, new JobID()));
+        assertEquals(4, actualSplits.size());
+    }
+
+    @Test(expected = CharacterCodingException.class)
+    public void testMisMatchedEncoding() throws Exception {
+        // input file has latin1 characters from the extended ascii character set, but these are not valid when using a
+        // UTF-8 encoding
+        long splitSize = 1024;
+        Configuration conf = createConfig("./fixtures/latin1.csv");
+        conf.setLong(FileInputFormat.SPLIT_MAXSIZE, splitSize);
+        CSVTextInputFormat inputFormat = new CSVTextInputFormat();
+        inputFormat.getSplits(new JobContextImpl(conf, new JobID()));
+    }
+
+    @Test(expected = UnsupportedEncodingException.class)
+    public void testUnsupportedEncoding() throws Exception {
+        Configuration conf = createConfig("./fixtures/latin1.csv");
+        conf.set(CSVTextInputFormat.FORMAT_ENCODING, "UTF-16");
+        CSVTextInputFormat inputFormat = new CSVTextInputFormat();
+        inputFormat.getSplits(new JobContextImpl(conf, new JobID()));
+    }
+
+    @Test
+    public void testEmptyDelimitedCells() throws Exception {
+        Configuration conf = createConfig("./fixtures/empty_cells.csv");
+        TaskAttemptContext context = new TaskAttemptContextImpl(conf, new TaskAttemptID());
+
+        CSVTextInputFormat inputFormat = new CSVTextInputFormat();
+        List<InputSplit> actualSplits = inputFormat.getSplits(new JobContextImpl(conf, new JobID()));
+        assertEquals(1, actualSplits.size());
+
+        RecordReader<LongWritable, List<Text>> recordReader =
+                inputFormat.createRecordReader(actualSplits.get(0), context);
+
+        recordReader.initialize(actualSplits.get(0), context);
+
+        recordReader.nextKeyValue();
+        List<Text> line = recordReader.getCurrentValue();
+
+        assertEquals(3, line.size());
+        assertEquals("col1", line.get(0).toString());
+        assertEquals("col2", line.get(1).toString());
+        assertEquals("col3", line.get(2).toString());
+
+        recordReader.nextKeyValue();
+        line = recordReader.getCurrentValue();
+        assertEquals(3, line.size());
+        assertEquals("", line.get(0).toString());
+        assertEquals("", line.get(1).toString());
+        assertEquals("", line.get(2).toString());
+
+        recordReader.nextKeyValue();
+        line = recordReader.getCurrentValue();
+        assertEquals(3, line.size());
+        assertEquals("abc", line.get(0).toString());
+        assertEquals("", line.get(1).toString());
+        assertEquals("", line.get(2).toString());
+
+        recordReader.nextKeyValue();
+        line = recordReader.getCurrentValue();
+        assertEquals(3, line.size());
+        assertEquals("", line.get(0).toString());
+        assertEquals("abc", line.get(1).toString());
+        assertEquals("", line.get(2).toString());
+
+        recordReader.nextKeyValue();
+        line = recordReader.getCurrentValue();
+        assertEquals(3, line.size());
+        assertEquals("", line.get(0).toString());
+        assertEquals("", line.get(1).toString());
+        assertEquals("abc", line.get(2).toString());
     }
 
     private Configuration createConfig(String fileName) {

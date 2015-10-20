@@ -28,9 +28,10 @@ import org.apache.hadoop.mapreduce.InputSplit;
 import org.apache.hadoop.mapreduce.RecordReader;
 import org.apache.hadoop.mapreduce.TaskAttemptContext;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.Reader;
+import java.io.*;
+import java.nio.charset.Charset;
+import java.nio.charset.CharsetDecoder;
+import java.nio.charset.CodingErrorAction;
 
 /**
  * Base clase for reading CSV records
@@ -49,6 +50,7 @@ public abstract class CSVRecordReader<K, V> extends RecordReader<K, V> {
     protected Reader in;
     protected K key = null;
     protected V value = null;
+    protected boolean isAscii;
 
     /**
      * Initialize function called by initialize and constructors
@@ -76,6 +78,7 @@ public abstract class CSVRecordReader<K, V> extends RecordReader<K, V> {
 
     @Override
     public void initialize(InputSplit genericSplit, TaskAttemptContext context) throws IOException {
+        isAscii = false; // our default is UTF-8...
         FileSplit split = (FileSplit) genericSplit;
         Configuration job = context.getConfiguration();
 
@@ -147,5 +150,56 @@ public abstract class CSVRecordReader<K, V> extends RecordReader<K, V> {
             in.close();
             in = null;
         }
+    }
+
+    protected Reader getReader(InputStream is, Configuration conf) throws UnsupportedEncodingException {
+        String encoding = conf.get(CSVFileInputFormat.FORMAT_ENCODING, CSVFileInputFormat.DEFAULT_ENCODING);
+        boolean isEncodingSupported = false;
+        for (String supportedEncoding : CSVTextInputFormat.SUPPORTED_ENCODINGS) {
+            if (supportedEncoding.equals(encoding)) {
+                isEncodingSupported = true;
+                break;
+            }
+        }
+        if (!isEncodingSupported) {
+            StringBuilder errSb = new StringBuilder();
+            for (String supportedEncoding : CSVTextInputFormat.SUPPORTED_ENCODINGS) {
+                if (errSb.length() != 0) {
+                    errSb.append(", ");
+                }
+                errSb.append("'");
+                errSb.append(supportedEncoding);
+                errSb.append("'");
+            }
+            throw new UnsupportedEncodingException("CSVInputFormat only supports the following encodings: " +
+                    errSb.toString());
+        }
+        if (encoding.equals("ISO-8859-1")) {
+            isAscii = true;
+        }
+        CharsetDecoder decoder = Charset.forName(encoding).newDecoder();
+        // NOTE: we are very strict about encoded characters since if we replace or ignore, we may unwittingly mess up
+        //       our split points...the reader doesn't tell us how many bytes were malformed/unmappable
+        decoder.onMalformedInput(CodingErrorAction.REPORT);
+        decoder.onUnmappableCharacter(CodingErrorAction.REPORT);
+        return new BufferedReader(new InputStreamReader(is, decoder));
+    }
+
+    protected int bytesReadForCharacter(int i, int numRead) {
+        numRead++;
+        if (!isAscii) {
+            // if we read a utf-8 character, we need to account for it's size in bytes
+            // see https://en.wikipedia.org/wiki/UTF-8 (5 and 6 byte characters are no longer part of utf-8, RFC 3629)
+            if (i > 0x007F) { // 127
+                numRead++;
+            }
+            if (i > 0x07FF) { // 2047
+                numRead++;
+            }
+            if (i > 0xFFFF) { // 65535
+                numRead++;
+            }
+        }
+        return numRead;
     }
 }

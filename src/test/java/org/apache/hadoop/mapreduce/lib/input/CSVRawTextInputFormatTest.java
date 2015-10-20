@@ -83,10 +83,16 @@ public class CSVRawTextInputFormatTest {
     @Test
     public void testSetFunction() throws Exception {
         Job job = Job.getInstance();
+        // check defaults first...
+        assertEquals(CSVRawTextInputFormat.DEFAULT_DELIMITER, CSVRawTextInputFormat.getDelimiter(job));
+        assertEquals(CSVRawTextInputFormat.DEFAULT_SEPARATOR, CSVRawTextInputFormat.getSeparator(job));
+        assertEquals(CSVRawTextInputFormat.DEFAULT_ENCODING, CSVRawTextInputFormat.getTextEncoding(job));
         CSVRawTextInputFormat.setDelimiter(job, "'");
         CSVRawTextInputFormat.setSeparator(job, ";");
+        CSVRawTextInputFormat.setTextEncoding(job, "ISO-8859-1");
         assertEquals("'", CSVRawTextInputFormat.getDelimiter(job));
         assertEquals(";", CSVRawTextInputFormat.getSeparator(job));
+        assertEquals("ISO-8859-1", CSVRawTextInputFormat.getTextEncoding(job));
     }
 
     private Configuration createConfig(String fileName) {

@@ -20,10 +20,8 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.Text;
 
-import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.io.UnsupportedEncodingException;
 import java.util.List;
 
@@ -90,7 +88,7 @@ public class CSVLineRecordReader extends CSVRecordReader<LongWritable, List<Text
             throw new IOException("CSVLineRecordReader: delimiter and separator cannot be the same character");
         }
         this.separator = separator.charAt(0);
-        this.in = new BufferedReader(new InputStreamReader(is, "UTF-8"));
+        this.in = getReader(is, conf);
         this.sb = new StringBuilder();
     }
 
@@ -128,18 +126,7 @@ public class CSVLineRecordReader extends CSVRecordReader<LongWritable, List<Text
         while ((i = in.read()) != -1) {
             // it is very important this value reflects the exact number of bytes read, otherwise the CSVTextInputFormat
             // getSplits() function would break
-            numRead++;
-            // if we read a utf-8 character, we need to account for it's size in bytes
-            // see https://en.wikipedia.org/wiki/UTF-8 (5 and 6 byte characters are no longer part of utf-8, RFC 3629)
-            if (i > 0x007F) { // 127
-                numRead++;
-            }
-            if (i > 0x07FF) { // 2047
-                numRead++;
-            }
-            if (i > 0xFFFF) { // 65535
-                numRead++;
-            }
+            numRead = bytesReadForCharacter(i, numRead);
             c = (char) i;
             // if our buffer is empty and we encounter a linefeed or carriage return, it likely means the file uses
             // both, and we just finished the previous line on one or the other, so just ignore it until we get some
@@ -158,7 +145,10 @@ public class CSVLineRecordReader extends CSVRecordReader<LongWritable, List<Text
                     lastCharWasDelimiter = false;
                     sb.deleteCharAt(sb.length() - 1);
                 } else {
-                    lastCharWasDelimiter = true;
+                    // properly handle case where the cell is empty but delimited: ...,"",...
+                    if (insideQuote) {
+                        lastCharWasDelimiter = true;
+                    }
                 }
                 insideQuote = !insideQuote;
             } else {
